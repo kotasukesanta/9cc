@@ -3,6 +3,7 @@
 // トークンの種類
 typedef enum {
   TK_RESERVED,  // 記号
+  TK_IDENT,     // 識別子  
   TK_NUM,       // 整数トークン
   TK_EOF,       // 入力の終わりを表すトークン
 } TokenKind;
@@ -42,12 +43,22 @@ void error_at(char *loc, char *fmt, ...) {
 // 次のトークンが期待している記号のときには、トークンを1つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op) {
-  if (token->kind  != TK_RESERVED ||
+  if (token->kind != TK_RESERVED ||
       strlen(op) != token->len ||
       memcmp(token->str, op, token->len))
     return false;
   token = token->next;
   return true;
+}
+
+// 次のトークンが識別子のときには、トークンを1つ読み進めて識別子を返す。
+// それ以外の場合にはNULLを返す。
+Token *consume_ident() {
+  if (token->kind != TK_IDENT)
+    return NULL;
+  Token *tok = token;
+  token = token->next;
+  return tok;
 }
 
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
@@ -75,11 +86,10 @@ bool at_eof() {
 }
 
 // 新しいトークンを作成してcurに繋げる
-Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
+Token *new_token(TokenKind kind, Token *cur, char *str) {
   Token *tok = calloc(1, sizeof(Token));
   tok->kind = kind;
   tok->str = str;
-  tok->len = len;
   cur->next = tok;
   return tok;
 }
@@ -97,24 +107,39 @@ Token *tokenize(char *p) {
       continue;
     }
 
+    if ('a' <= *p && *p <= 'z') {
+      cur = new_token(TK_IDENT, cur, p++);
+      cur->len = 1;
+      continue;
+    }
+
     if (!strncmp(p, "<=", 2) || !strncmp(p, ">=", 2) || !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
-      cur = new_token(TK_RESERVED, cur, p, 2);
-      p += 2;
+      cur = new_token(TK_RESERVED, cur, p);
+      cur->len = 2;
+      p = p + 2;
       continue;
     }
 
     if (*p == '<' || *p == '>') {
-      cur = new_token(TK_RESERVED, cur, p++, 1);
+      cur = new_token(TK_RESERVED, cur, p++);
+      cur->len = 1;
+      continue;
+    }
+
+    if (*p == '=' || *p == ';') {
+      cur = new_token(TK_RESERVED, cur, p++);
+      cur->len = 1;
       continue;
     }
 
     if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')') {
-      cur = new_token(TK_RESERVED, cur, p++, 1);
+      cur = new_token(TK_RESERVED, cur, p++);
+      cur->len = 1;
       continue;
     }
 
     if (isdigit(*p)) {
-      cur = new_token(TK_NUM, cur, p, 0);
+      cur = new_token(TK_NUM, cur, p);
       cur->val = strtol(p, &p, 10);
       continue;
     }
@@ -122,7 +147,7 @@ Token *tokenize(char *p) {
     error("トークナイズできません");
   }
 
-  new_token(TK_EOF, cur, p, 1);
+  new_token(TK_EOF, cur, p);
   return head.next;
 }
 
@@ -146,6 +171,14 @@ Node *primary() {
   if (consume("(")) {
     Node *node = expr();
     expect(")");
+    return node;
+  }
+
+  Token *tok = consume_ident();
+  if (tok) {
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = ND_LVAR;
+    node->offset = (tok->str[0] - 'a' + 1) * 8;
     return node;
   }
 
@@ -217,6 +250,29 @@ Node *equality() {
   }
 }
 
+Node *code[100];
+
+Node *assign() {
+  Node *node = equality();
+
+  if (consume("="))
+    node = new_node(ND_ASSIGN, node, assign());
+  return node;
+}
+
 Node *expr() {
-  return equality();
+  return assign();
+}
+
+Node *stmt() {
+  Node *node = expr();
+  expect(";");
+  return node;
+}
+
+void program() {
+  int i = 0;
+  while (!at_eof())
+    code[i++] = stmt();
+  code[i] = NULL;
 }
