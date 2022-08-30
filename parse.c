@@ -5,6 +5,7 @@ typedef enum {
   TK_RESERVED,  // 記号
   TK_IDENT,     // 識別子  
   TK_NUM,       // 整数トークン
+  TK_RETURN,    // リターン
   TK_EOF,       // 入力の終わりを表すトークン
 } TokenKind;
 
@@ -82,6 +83,13 @@ Token *consume_ident() {
   return tok;
 }
 
+bool consume_kind(TokenKind kind) {
+  if (token->kind != kind)
+    return false;
+  token = token->next;
+  return true;
+}
+
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
 // それ以外の場合にはエラーを報告する。
 void expect(char *op) {
@@ -122,6 +130,13 @@ int len_ident(char *p) {
   return p - s;
 }
 
+int is_alnum(char c) {
+  return ('a' <= c && c <= 'z') ||
+         ('A' <= c && c <= 'Z') ||
+         ('0' <= c && c <= '9') ||
+         (c == '_');
+}
+
 // 入力文字列pをトークナイズしてそれを返す
 Token *tokenize(char *p) {
   Token head;
@@ -132,6 +147,13 @@ Token *tokenize(char *p) {
     // 空白文字をスキップ
     if (isspace(*p)) {
       p++;
+      continue;
+    }
+
+    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_RETURN, cur, p);
+      cur->len = 6;
+      p += cur->len;
       continue;
     }
 
@@ -222,7 +244,6 @@ Node *primary() {
     }
     return node;
   }
-
   // そうでなければ数値のはず
   return new_node_num(expect_number());
 }
@@ -306,8 +327,19 @@ Node *expr() {
 }
 
 Node *stmt() {
-  Node *node = expr();
-  expect(";");
+  Node *node;
+
+  if (consume_kind(TK_RETURN)) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_RETURN;
+    node->lhs = expr();
+  } else {
+    node = expr();
+  }
+
+  if (!consume(";"))
+    error_at(token->str, "';'ではないトークンです");
+
   return node;
 }
 

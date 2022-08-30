@@ -20,6 +20,7 @@ typedef enum {
   ND_NE,     // !=
   ND_LT,     // <
   ND_LTE,    // <=
+  ND_RETURN, // return
 } NodeKind;
 
 typedef struct Node Node;
