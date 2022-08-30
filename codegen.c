@@ -15,15 +15,21 @@ void gen(Node *node) {
       printf("  push %d\n", node->val);
       return;
     case ND_LVAR:
+      // ローカル変数のアドレスをスタックに積みます。
       gen_lval(node);
+      // ローカル変数のアドレスから値を取得し、スタックに積みます。
       printf("  pop rax\n");
       printf("  mov rax, [rax]\n");
       printf("  push rax\n");
       return;
     case ND_ASSIGN:
+      // 左辺値のローカル変数のアドレスをスタックに積みます。
       gen_lval(node->lhs);
+      // 右辺値の値をスタックに積みます。
       gen(node->rhs);
 
+      // 右辺値の値を左辺値の示すアドレスにストアします。
+      // ストアした値をスタックに積みま。
       printf("  pop rdi\n");
       printf("  pop rax\n");
       printf("  mov [rax], rdi\n");
